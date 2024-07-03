@@ -90,27 +90,54 @@ class EvalVisitor(MiniCVisitor):
     def visitStatement(self, ctx: MiniCParser.StatementContext):
         #tratamento de retorno
         if ctx.getChild(0).getText() == "return":
-            var = self.visit(ctx.expression()) if ctx.expression() else 'void'
+            var = self.visit(ctx.exprStat()) if ctx.exprStat() else 'void'
             if var != self.return_type:
                 self.add_error(f"Error: Tipo de retorno incompatível. Esperado '{self.return_type}' mas obteve '{var}'", ctx)
 
-        if ctx.expression():
-            self.visit(ctx.expression())
-        if ctx.statement():
-            for i in ctx.statement():
-                self.visit(i)
+        if ctx.ifStat():
+            self.visit(ctx.ifStat())
+        if ctx.whileStat():
+            self.visit(ctx.whileStat())
+        if ctx.assignState():
+            self.visit(ctx.assignState())
+        if ctx.exprStat():
+            self.visit(ctx.exprStat())
         if ctx.block():
-            return self.visit(ctx.block())
+            self.visit(ctx.block())
 
     def visitIfStat(self, ctx:MiniCParser.IfStatContext):
         print("oiiii")
-        cond = self.visit(ctx.expression())
-        then_label = self.new_temp()
+        if ctx.expression():
+            cond = self.visit(ctx.expression())
+            then_label = self.new_temp()
+            end_label = self.new_temp()
+            print(f"if {cond} goto {then_label}\ngoto {end_label}\n{then_label}:")
+            if ctx.statement():
+                self.visit(ctx.statement())
+            print(f"{end_label}:")
+
+    def visitWhileStat(self, ctx:MiniCParser.WhileStatContext):
+        start_label = self.new_temp()
+        middle_label = self.new_temp()
         end_label = self.new_temp()
-        print(f"if {cond} goto {then_label}\ngoto {end_label}\n{then_label}:")
+        print(f'{start_label}: ')
+        cond = self.visit(ctx.expression())
+        print(f"if {cond} goto {middle_label}\ngoto {end_label}\n{middle_label}:")
         self.visit(ctx.statement())
-        print(f"{end_label}:")
         return
+        
+    def visitAssignState(self, ctx:MiniCParser.AssignStateContext):
+        value = self.visit(ctx.expression())
+        code = f"{ctx.IDENTIFIER().getText()} = {value};"
+        print(code)
+        return code
+
+    def visitexprStat(self, ctx:MiniCParser.ExprStatContext):
+        if ctx.expression():
+            express = self.new_temp()
+            code = f"{ctx.expression()};"
+            print(code)
+            return code
 
     def visitExpression(self, ctx: MiniCParser.ExpressionContext):
         l = list(ctx.getChildren())
@@ -131,7 +158,7 @@ class EvalVisitor(MiniCVisitor):
                 left_type = self.visit(left)
                 if left.getChild(0) is None:
                     self.add_error(f"Error: Variavel '{left.getText()}' nao foi declarada",ctx)
-                    return left_type
+                    return left.getText()
 
             if right.getText() in self.symbol_table:
                 right_type = self.symbol_table[right.getText()]
@@ -145,6 +172,7 @@ class EvalVisitor(MiniCVisitor):
                 return left_type
             elif operator in ['+', '-', '*', '/', '%', '+=', '-=', '*=', '/=', '%=']:
                 if left_type == 'int' and right_type == 'int':
+                    print(left.getText(), operator, right.getText())
                     return 'int'
                 elif left_type == 'char' and right_type == 'char':
                     return 'char'
@@ -153,7 +181,7 @@ class EvalVisitor(MiniCVisitor):
                     return None
             elif operator in ['==', '!=', '<', '<=', '>', '>=']:
                 if left_type == right_type:
-                    return 'int'
+                    return f'{left.getText()}{operator}{right.getText()}'
                 else:
                     self.add_error(f"Error: Operadores incompatíveis para comparação. '{left_type}' e '{right_type}'", ctx)
                     return None
@@ -192,13 +220,15 @@ class EvalVisitor(MiniCVisitor):
             if ctx.IDENTIFIER():
                 if ctx.IDENTIFIER().getText() not in self.symbol_table:
                     self.add_error(f"Error: Variavel '{ctx.IDENTIFIER().getText()}' nao foi declarada",ctx)
-                return self.symbol_table.get(ctx.IDENTIFIER().getText())
+                return ctx.IDENTIFIER().getText()
+            
             elif ctx.CONSTANT_INT():
                 self.symbol_table[ctx.CONSTANT_INT().getText()] = 'int'
-                return self.symbol_table.get(ctx.CONSTANT_INT().getText())
+                return ctx.CONSTANT_INT().getText()
+            
             elif ctx.CONSTANT_CHAR():
                 self.symbol_table[ctx.CONSTANT_CHAR().getText()] = 'char'
-                return self.symbol_table.get(ctx.CONSTANT_CHAR().getText())
+                return ctx.CONSTANT_CHAR().getText()
 
     def get_argument_types(self, argument_list_ctx):
         types = []

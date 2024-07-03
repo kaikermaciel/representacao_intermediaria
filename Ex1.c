@@ -1,5 +1,6 @@
 int x;
 
 int teste(int a, b){
-  if(a == 1) return a;
+  if (a < b) then
+  a = a + 1;
 }
